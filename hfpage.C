@@ -105,13 +105,26 @@ Status HFPage::deleteRecord(const RID& rid)
         rid.pageNo != curPage
        )
         return FAIL;
-    // release the slot
-    slot[rid.slotNo].offset = 0;
-    slot[rid.slotNo].length = EMPTY_SLOT;
-    // check if compacting is necessary
-    if (rid.slotNo + 1 == this->slotCnt) {
+    int recLen = slot[rid.slotNo].length;
+    int recOffset = slot[rid.slotNo].offset;
 
+    //Move all lower records 1 closer to the end of the page, covering this record
+    memmove(data + this->usedPtr + recLen, data + this->usedPtr, recFffset - this->usedPtr);
+    //Adjust usedPtr to reflect new edge of records
+    this->usedPtr += recLen;
+    this->freeSpace += recLen;
+
+    slot[rid.slotNo].length = EMPTY_SLOT;
+    //Clear out unused slots at the end of the slot array
+    while(slot[slotCnt - 1].length != EMPTY_SLOT) slotCnt--;
+
+    //Adjust the offsets of the other records
+    if (rid.slotNo<slotCnt) {
+        for (int i=rid.slotNo + 1; i < slotCnt; i++) {
+            slot[i].offset += recLen;
+        }
     }
+
     return OK;
 }
 
