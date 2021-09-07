@@ -9,19 +9,22 @@
 
 // **********************************************************
 // page class constructor
-
 void HFPage::init(PageId pageNo)
 {
-    this->nextPage = INVALID_PAGE;
-    this->prevPage = INVALID_PAGE;
-    this->curPage = pageNo;
+    // slot count intially is 0
     this->slotCnt = 0;
-    this->usedPtr = MAX_SPACE - DPFIXED;
+    // free space
     this->freeSpace = MAX_SPACE - DPFIXED + sizeof(slot_t);
+    // used ptr
+    this->usedPtr = MAX_SPACE - DPFIXED;
+    // set page numbers
+    this->curPage = pageNo;
+    this->prevPage = INVALID_PAGE;
+    this->nextPage = INVALID_PAGE;
+    // intial slot
     this->slot[0].offset = 0;
     this->slot[0].length = EMPTY_SLOT;
 }
-
 // **********************************************************
 // dump page utlity
 void HFPage::dumpPage()
@@ -38,42 +41,41 @@ void HFPage::dumpPage()
              << ", slot["<< i << "].length=" << slot[i].length << endl;
     }
 }
-
 // **********************************************************
 PageId HFPage::getPrevPage()
 {
+    // get the previous page number
     return this->prevPage;
 }
-
 // **********************************************************
 void HFPage::setPrevPage(PageId pageNo)
 {
+    // set previous page number 
     this->prevPage = pageNo;
 }
-
 // **********************************************************
 PageId HFPage::getNextPage()
 {
+    // get next page number
     return this->nextPage;
 }
-
 // **********************************************************
 void HFPage::setNextPage(PageId pageNo)
 {
+    // set next page number
     this->nextPage = pageNo;
 }
-
 // **********************************************************
 // Add a new record to the page. Returns OK if everything went OK
 // otherwise, returns DONE if sufficient space does not exist
 // RID of the new record is returned via rid parameter.
 Status HFPage::insertRecord(char* recPtr, int recLen, RID& rid)
 {
-    if(available_space() < recLen) return DONE;
+    if (available_space() < recLen) return DONE;
     int slotNum = 0;
     //Find an empty slot
-    for(slotNum=0;slotNum<slotCnt;slotNum++) {
-	if(slot[slotNum].length == EMPTY_SLOT) break;
+    for (slotNum = 0; slotNum < slotCnt; slotNum++) {
+        if (slot[slotNum].length == EMPTY_SLOT) break;
     }
     //move the used pointer back from the end
     this->usedPtr = this->usedPtr - recLen;
@@ -84,9 +86,9 @@ Status HFPage::insertRecord(char* recPtr, int recLen, RID& rid)
     memcpy(data + usedPtr, recPtr, recLen);
     //adjust page values to reflect new record
     this->freeSpace -= recLen;
-    if(slotNum == this->slotCnt) slotCont++;
+    if (slotNum == this->slotCnt) slotCnt++;
     //update record values based on the page
-    rid.slotNo = this->slotNum;
+    rid.slotNo = slotNum;
     rid.pageNo = this->curPage;
     return OK;
 }
@@ -97,7 +99,19 @@ Status HFPage::insertRecord(char* recPtr, int recLen, RID& rid)
 // Use memmove() rather than memcpy() as space may overlap.
 Status HFPage::deleteRecord(const RID& rid)
 {
-    // fill in the body
+    // perform sanity checks
+    if (slotCnt == 0 || rid.slotNo < 0 ||
+        rid.slotNo > slotCnt || slot[rid.slotNo].length == EMPTY_SLOT ||
+        rid.pageNo != curPage
+       )
+        return FAIL;
+    // release the slot
+    slot[rid.slotNo].offset = 0;
+    slot[rid.slotNo].length = EMPTY_SLOT;
+    // check if compacting is necessary
+    if (rid.slotNo + 1 == this->slotCnt) {
+
+    }
     return OK;
 }
 
@@ -105,7 +119,13 @@ Status HFPage::deleteRecord(const RID& rid)
 // returns RID of first record on page
 Status HFPage::firstRecord(RID& firstRid)
 {
-    // fill in the body
+    // perform sanity checks
+    if (slotCnt == 0 || slot[0].length == EMPTY_SLOT)
+        return FAIL;
+    // pass data members
+    firstRid.pageNo = curPage;
+    firstRid.slotNo = 0;
+    // return status
     return OK;
 }
 
@@ -114,19 +134,38 @@ Status HFPage::firstRecord(RID& firstRid)
 // returns DONE if no more records exist on the page; otherwise OK
 Status HFPage::nextRecord (RID curRid, RID& nextRid)
 {
-    // fill in the body
-
+    // perform sanity checks
+    if (    slotCnt == 0 || curRid.slotNo < 0 ||
+            curRid.slotNo > slotCnt || slot[curRid.slotNo].length == EMPTY_SLOT ||
+            curRid.pageNo != curPage
+       )
+        return FAIL;
+    // check if this is the last slot
+    if (curRid.slotNo + 1 == slotCnt)
+        return DONE;
+    // pass data members
+    nextRid.pageNo = curPage;
+    nextRid.slotNo = curRid.slotNo + 1;
+    // return status
     return OK;
 }
-
 // **********************************************************
 // returns length and copies out record with RID rid
 Status HFPage::getRecord(RID rid, char* recPtr, int& recLen)
 {
-    if(slotCnt == 0 || rid.slotNo < 0 || rid.slotNo >= slotCnt || slot[rid.slotNo].length == EMPTY_SLOT || rid.pageNo != curPage) return FAIL;
+    // perform sanity checks
+    if (    slotCnt == 0 || rid.slotNo < 0 || 
+            rid.slotNo >= slotCnt || slot[rid.slotNo].length == EMPTY_SLOT || 
+            rid.pageNo != curPage
+       ) 
+        return FAIL;
+    // copy out data
+    memcpy(recPtr, data + slot[rid.slotNo].offset, recLen);
+    // set record length
+    recLen = slot[rid.slotNo].length;
+    // return status
     return OK;
 }
-
 // **********************************************************
 // returns length and pointer to record with RID rid.  The difference
 // between this and getRecord is that getRecord copies out the record
@@ -134,28 +173,37 @@ Status HFPage::getRecord(RID rid, char* recPtr, int& recLen)
 // in recPtr.
 Status HFPage::returnRecord(RID rid, char*& recPtr, int& recLen)
 {
-    // fill in the body
+    // perform sanity checks
+    if (slotCnt == 0 || rid.slotNo < 0 ||
+        rid.slotNo >= slotCnt || slot[rid.slotNo].length == EMPTY_SLOT ||
+        rid.pageNo != curPage
+       )
+        return FAIL;
+    // pass data members
+    recPtr = &data[slot[rid.slotNo].offset];
+    recLen = slot[rid.slotNo].length;
+    // return status
     return OK;
 }
-
 // **********************************************************
 // Returns the amount of available space on the heap file page
 int HFPage::available_space(void)
 {
-    if(!slotCnt) return this->freeSpace - sizeof(slot_t);
+    // check if any slots exist yet
+    if (!this->slotCnt)
+        return this->freeSpace - sizeof(slot_t);
+    // default
     return this->freeSpace - slotCnt * sizeof(slot_t);
 }
-
 // **********************************************************
 // Returns 1 if the HFPage is empty, and 0 otherwise.
 // It scans the slot directory looking for a non-empty slot.
 bool HFPage::empty(void)
 {
-    for(int i=0;i<this->slotCnt;i++) {
-	if(slot[i].length != EMPTY_SLOT) return false;
-    }
+    // iterate over the array and return false if a slot is being used
+    for (int i = 0; i < this->slotCnt; i++)
+        if (this->slot[i].length != EMPTY_SLOT)
+            return false;
+    // default 
     return true;
 }
-
-
-
