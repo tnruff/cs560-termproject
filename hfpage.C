@@ -109,7 +109,7 @@ Status HFPage::deleteRecord(const RID& rid)
     int recOffset = slot[rid.slotNo].offset;
 
     //Move all lower records 1 closer to the end of the page, covering this record
-    memmove(data + this->usedPtr + recLen, data + this->usedPtr, recFffset - this->usedPtr);
+    memmove(data + this->usedPtr + recLen, data + this->usedPtr, recOffset - this->usedPtr);
     //Adjust usedPtr to reflect new edge of records
     this->usedPtr += recLen;
     this->freeSpace += recLen;
@@ -133,11 +133,14 @@ Status HFPage::deleteRecord(const RID& rid)
 Status HFPage::firstRecord(RID& firstRid)
 {
     // perform sanity checks
-    if (slotCnt == 0 || slot[0].length == EMPTY_SLOT)
+    if(empty()) return DONE;
+    if (slotCnt == 0)
         return FAIL;
-    // pass data members
+    // Find the first slot filled
+    int curSlot = 0;
+    while(slot[curSlot].length == EMPTY_SLOT) curSlot++;
     firstRid.pageNo = curPage;
-    firstRid.slotNo = 0;
+    firstRid.slotNo = curSlot;
     // return status
     return OK;
 }
