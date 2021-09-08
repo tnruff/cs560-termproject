@@ -78,18 +78,18 @@ Status HFPage::insertRecord(char* recPtr, int recLen, RID& rid)
         if (slot[slotNum].length == EMPTY_SLOT) break;
     }
     //move the used pointer back from the end
-    this->usedPtr = this->usedPtr - recLen;
+    usedPtr = usedPtr - recLen;
     //copy the parameters into the found slot
-    slot[slotNum].offset = this->usedPtr;
+    slot[slotNum].offset = usedPtr;
     slot[slotNum].length = recLen;
     //copy the record into the page
     memcpy(data + usedPtr, recPtr, recLen);
     //adjust page values to reflect new record
-    this->freeSpace -= recLen;
-    if (slotNum == this->slotCnt) slotCnt++;
+    freeSpace -= recLen;
+    if (slotNum == slotCnt) slotCnt++;
     //update record values based on the page
     rid.slotNo = slotNum;
-    rid.pageNo = this->curPage;
+    rid.pageNo = curPage;
     return OK;
 }
 
@@ -137,11 +137,15 @@ Status HFPage::firstRecord(RID& firstRid)
     if (slotCnt == 0)
         return FAIL;
     // Find the first slot filled
-    int curSlot = 0;
-    while(slot[curSlot].length == EMPTY_SLOT) curSlot++;
-    firstRid.pageNo = curPage;
-    firstRid.slotNo = curSlot;
+    for (int i = 0; i < slotCnt; i++) {
+        if (slot[i].length != EMPTY_SLOT) {
+            firstRid.slotNo = i;
+            firstRid.pageNo = curPage;
+            break;
+        }
+    }
     // return status
+    cout<<"Returning first record\n";
     return OK;
 }
 
@@ -151,11 +155,7 @@ Status HFPage::firstRecord(RID& firstRid)
 Status HFPage::nextRecord (RID curRid, RID& nextRid)
 {
     // perform sanity checks
-    if (    slotCnt == 0 || curRid.slotNo < 0 ||
-            curRid.slotNo > slotCnt || slot[curRid.slotNo].length == EMPTY_SLOT ||
-            curRid.pageNo != curPage
-       )
-        return FAIL;
+    if(empty() || curRid.pageNo != curPage) return FAIL;
     // check if this is the last slot
     if (curRid.slotNo + 1 == slotCnt)
         return DONE;
