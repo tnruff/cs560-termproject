@@ -6,6 +6,16 @@
 #include "buf.h"
 #include "db.h"
 
+/*
+    Authors: Thomas Ruff, Alex Erwin
+    CSC 560 Project 1
+    September 7, 2021
+    File: hfpage.C - Implementation of a heap file page with insertion, deletion, and retrieval of records.
+    Does not currently allow modification of records other than deletion/insertion.
+    Contains a slot directory on the page which indicates which records are present at what offset.
+    Open slots are allowed in the slot directory, but not at the end.
+    Implemented in C++
+*/
 
 // **********************************************************
 // page class constructor
