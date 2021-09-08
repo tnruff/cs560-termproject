@@ -116,7 +116,10 @@ Status HFPage::deleteRecord(const RID& rid)
 
     slot[rid.slotNo].length = EMPTY_SLOT;
     //Clear out unused slots at the end of the slot array
-    while(slot[slotCnt - 1].length != EMPTY_SLOT) slotCnt--;
+    for(int i=slotCnt-1;i>-1;i--) {
+	if(slot[i].length != EMPTY_SLOT) break;
+	slotCnt--;
+    }
 
     //Adjust the offsets of the other records
     if (rid.slotNo<slotCnt) {
@@ -160,8 +163,13 @@ Status HFPage::nextRecord (RID curRid, RID& nextRid)
     if (curRid.slotNo + 1 == slotCnt)
         return DONE;
     // pass data members
-    nextRid.pageNo = curPage;
-    nextRid.slotNo = curRid.slotNo + 1;
+    for(int i=curRid.slotNo+1;i<slotCnt;i++) {
+	if(slot[i].length != EMPTY_SLOT) {
+	    nextRid.slotNo = i;
+	    nextRid.pageNo = curPage;
+	    return OK;
+	}
+    }
     // return status
     return OK;
 }
@@ -176,7 +184,10 @@ Status HFPage::getRecord(RID rid, char* recPtr, int& recLen)
        ) 
         return FAIL;
     // copy out data
-    memcpy(recPtr, data + slot[rid.slotNo].offset, recLen);
+    for(int i=0;i<slot[rid.slotNo].length;i++) {
+	*recPtr = data[slot[rid.slotNo].offset+i];
+	recPtr++;
+    }
     // set record length
     recLen = slot[rid.slotNo].length;
     // return status
@@ -196,7 +207,7 @@ Status HFPage::returnRecord(RID rid, char*& recPtr, int& recLen)
        )
         return FAIL;
     // pass data members
-    recPtr = &data[slot[rid.slotNo].offset];
+    recPtr = &data[this->slot[rid.slotNo].offset];
     recLen = slot[rid.slotNo].length;
     // return status
     return OK;
