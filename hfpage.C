@@ -21,26 +21,26 @@
 // page class constructor
 void HFPage::init(PageId pageNo)
 {
-    // slot count intially is 0
-    this->slotCnt = 0;
-    // free space
-    this->freeSpace = MAX_SPACE - DPFIXED + sizeof(slot_t);
-    // used ptr
-    this->usedPtr = MAX_SPACE - DPFIXED;
-    // set page numbers
-    this->curPage = pageNo;
-    this->prevPage = INVALID_PAGE;
-    this->nextPage = INVALID_PAGE;
-    // intial slot
-    this->slot[0].offset = 0;
-    this->slot[0].length = EMPTY_SLOT;
+	//slot count is initially zero
+	slotCnt=0;
+	//used ptr
+	usedPtr=MAX_SPACE - DPFIXED;
+	//free space considers initial slot
+	freeSpace=MAX_SPACE - DPFIXED+ sizeof(slot_t);
+	//Hit initial page numbers
+	prevPage=INVALID_PAGE;
+	nextPage=INVALID_PAGE;
+	curPage=pageNo;
+	//Set up the first slot
+	slot[0].offset=-1;
+	slot[0].length=-1;
 }
+
 // **********************************************************
 // dump page utlity
 void HFPage::dumpPage()
 {
     int i;
-
     cout << "dumpPage, this: " << this << endl;
     cout << "curPage= " << curPage << ", nextPage=" << nextPage << endl;
     cout << "usedPtr=" << usedPtr << ",  freeSpace=" << freeSpace
@@ -51,6 +51,7 @@ void HFPage::dumpPage()
              << ", slot["<< i << "].length=" << slot[i].length << endl;
     }
 }
+
 // **********************************************************
 PageId HFPage::getPrevPage()
 {
@@ -75,31 +76,46 @@ void HFPage::setNextPage(PageId pageNo)
     // set next page number
     this->nextPage = pageNo;
 }
+
 // **********************************************************
 // Add a new record to the page. Returns OK if everything went OK
 // otherwise, returns DONE if sufficient space does not exist
 // RID of the new record is returned via rid parameter.
 Status HFPage::insertRecord(char* recPtr, int recLen, RID& rid)
 {
-    if (available_space() < recLen) return DONE;
-    int slotNum = 0;
-    //Find an empty slot
-    for (slotNum = 0; slotNum < slotCnt; slotNum++) {
-        if (slot[slotNum].length == EMPTY_SLOT) break;
-    }
-    //move the used pointer back from the end
-    usedPtr = usedPtr - recLen;
-    //copy the parameters into the found slot
-    slot[slotNum].offset = usedPtr;
-    slot[slotNum].length = recLen;
-    //copy the record into the page
-    memcpy(data + usedPtr, recPtr, recLen);
-    //adjust page values to reflect new record
-    freeSpace -= recLen;
-    if (slotNum == slotCnt) slotCnt++;
-    //update record values based on the page
-    rid.slotNo = slotNum;
-    rid.pageNo = curPage;
+	int slotNum = slotCnt;
+	int spaceNeeded = recLen+sizeof(slot_t);
+	int slotFlag = 1;
+	//Search for an open slot
+	for (int i = 0 ; i < slotCnt; ++i) {
+		if (slot[i].length==-1) {
+			//When a slot is found, insert into that slot
+			spaceNeeded = recLen;
+			slotNum = i;
+			//No new slot is needed
+			slotFlag = 0;
+			break;
+		}
+	}
+
+	if (spaceNeeded > this->available_space()+4)
+		return DONE;
+
+	//Adjust data array
+	slot[slotNum].offset=usedPtr-recLen;
+	slot[slotNum].length=recLen;
+	for (int i =0 ; i != recLen; ++i)
+	{
+		data[usedPtr-recLen+i]=recPtr[i];
+	}
+	//update member parameters;
+	usedPtr = usedPtr - recLen;
+	freeSpace -= spaceNeeded;
+	rid.pageNo = curPage;
+	rid.slotNo = slotNum;
+	if(slotFlag == 1) {
+		slotCnt += 1;
+	}
     return OK;
 }
 
@@ -140,7 +156,6 @@ Status HFPage::deleteRecord(const RID& rid)
 
     return OK;
 }
-
 // **********************************************************
 // returns RID of first record on page
 Status HFPage::firstRecord(RID& firstRid)
@@ -158,10 +173,8 @@ Status HFPage::firstRecord(RID& firstRid)
         }
     }
     // return status
-    cout<<"Returning first record\n";
     return OK;
 }
-
 // **********************************************************
 // returns RID of next record on the page
 // returns DONE if no more records exist on the page; otherwise OK
